@@ -1,8 +1,8 @@
 # RaveHack
-A PoC Ravenfield Hack Written On C# With Unity API
+A PoC Ravenfield Internal Hack Written On C# With Unity API
 
 
-Ravenfield Internal Hack That Uses Unity API To Draw Box-ESP and Draw things, I call it PoC Since it lacks a lot of features.
+Ravenfield Internal Hack That Uses Unity API To Draw Box-ESP and Draw things, Tested On EA31 (Latest Version) But Possibly Work on other versions too. I call it PoC Since it lacks a lot of features.
 You Are Able To Take This, Modify And Use On Your Project.
 
 
