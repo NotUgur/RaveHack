@@ -8,7 +8,6 @@ namespace RaveHack
 {
     public class Hacks : MonoBehaviour
     {
-
         private const float DEFAULT_SPEED_MULTIPLIER = 1f;
         private const float DEFAULT_HEALTH = 100f;
         private const float DEFAULT_WEAPON_COOLDOWN = 0.2f;
@@ -35,8 +34,6 @@ namespace RaveHack
         public bool unlimitedAmmo = false;
 
         public Color espColor = Color.red;
-
-        public bool antiRagdoll = false;
 
         public bool oneShotKill = false;
 
@@ -71,11 +68,49 @@ namespace RaveHack
 
         private Vector2 scrollPosition;
 
+
+        public KeyCode espKey = KeyCode.F1;
+        public KeyCode speedHackKey = KeyCode.F2;
+        public KeyCode healthHackKey = KeyCode.F3;
+        public KeyCode godModeKey = KeyCode.F4;
+        public KeyCode oneShotKey = KeyCode.F5;
+        public KeyCode noRecoilKey = KeyCode.F6;
+        public KeyCode noSpreadKey = KeyCode.F7;
+        public KeyCode rapidFireKey = KeyCode.F8;
+        public KeyCode flyHackKey = KeyCode.F9;
+        public KeyCode noClipKey = KeyCode.F10;
+        public KeyCode silentAimKey = KeyCode.F11;
+
+        private bool waitingForKey = false;
+        private string currentKeyBindAction = "";
+
+
+        public float silentAimFov = 90f;
+        private Material circleMaterial;
+        private const int CIRCLE_SEGMENTS = 64;
+
+
+        public bool showHealthBarESP = true;
+        public bool showSkeletonESP = true;
+        public bool showHeadDotESP = true;
+        public bool showTracerESP = true;
+
+
+        public bool enableChams = false;
+        public Color chamsColor = Color.magenta;
+        private const float CHAMS_MAX_DISTANCE = 70f;
+        private Dictionary<SkinnedMeshRenderer, Material> originalChamsMaterials = new Dictionary<SkinnedMeshRenderer, Material>();
+
+        public float silentAimMaxDistance = 500f;
+
         void Start()
         {
             labelStyle = new GUIStyle();
             labelStyle.normal.textColor = Color.white;
             labelStyle.fontSize = 12;
+
+
+            CreateCircleMaterial();
 
             SaveDefaultValues();
             initialized = true;
@@ -111,6 +146,7 @@ namespace RaveHack
 
             UpdateFPS();
             HandleMenuToggle();
+            HandleKeybinds();
             
             var player = LocalPlayer.actor;
             if (player == null) return;
@@ -119,11 +155,9 @@ namespace RaveHack
             HandleHealthHack(player);
             HandleGodMode(player);
             HandleWeaponEnhancements(player);
-            HandleRagdoll(player);
             HandleProjectiles(player);
             HandleMovementHacks(player);
             HandleSilentAim();
-
 
             if (enableSilentAim)
             {
@@ -135,6 +169,9 @@ namespace RaveHack
                     }
                 }
             }
+
+            if (enableChams)
+                HandleChams();
         }
 
         private void UpdateFPS()
@@ -158,6 +195,24 @@ namespace RaveHack
                     FpsActorController.instance.unlockCursorRavenscriptOverride = showMenu;
                 Cursor.visible = showMenu;
                 Cursor.lockState = showMenu ? CursorLockMode.None : CursorLockMode.Locked;
+            }
+        }
+
+        private void HandleKeybinds()
+        {
+            if (!waitingForKey) 
+            {
+                if (Input.GetKeyDown(espKey)) enableESP = !enableESP;
+                if (Input.GetKeyDown(speedHackKey)) enableSpeedHack = !enableSpeedHack;
+                if (Input.GetKeyDown(healthHackKey)) enableHealthHack = !enableHealthHack;
+                if (Input.GetKeyDown(godModeKey)) godMode = !godMode;
+                if (Input.GetKeyDown(oneShotKey)) oneShotKill = !oneShotKill;
+                if (Input.GetKeyDown(noRecoilKey)) noRecoil = !noRecoil;
+                if (Input.GetKeyDown(noSpreadKey)) noSpread = !noSpread;
+                if (Input.GetKeyDown(rapidFireKey)) rapidFire = !rapidFire;
+                if (Input.GetKeyDown(flyHackKey)) enableFlyHack = !enableFlyHack;
+                if (Input.GetKeyDown(noClipKey)) enableNoClip = !enableNoClip;
+                if (Input.GetKeyDown(silentAimKey)) enableSilentAim = !enableSilentAim;
             }
         }
 
@@ -231,44 +286,6 @@ namespace RaveHack
             }
         }
 
-        private void HandleRagdoll(Actor player)
-        {
-            if (!antiRagdoll || player == null) return;
-
-            try
-            {
-                if (player.ragdoll != null)
-                {
-                    player.ragdoll.state = ActiveRaggy.State.Animate;
-                    
-                    if (player.ragdoll.ragdollObject != null && player.ragdoll.ragdollObject.activeSelf)
-                    {
-                        player.ragdoll.ragdollObject.SetActive(false);
-                    }
-                    
-                    var rigidbodies = player.GetComponentsInChildren<Rigidbody>();
-                    foreach (var rb in rigidbodies)
-                    {
-                        if (rb != null)
-                        {
-                            rb.isKinematic = true;
-                            rb.velocity = Vector3.zero;
-                            rb.angularVelocity = Vector3.zero;
-                        }
-                    }
-                    
-                    if (player.controller != null)
-                    {
-                        player.controller.enabled = true;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Error in HandleRagdoll: {ex.Message}");
-            }
-        }
-
         private void HandleProjectiles(Actor player)
         {
             if (player.activeWeapon == null) return;
@@ -278,8 +295,18 @@ namespace RaveHack
             {
                 if (proj.sourceWeapon == weapon)
                 {
-                    proj.configuration.damage = oneShotKill ? 9999f : defaultProjectileDamage;
-                    proj.configuration.balanceDamage = oneShotKill ? 9999f : defaultProjectileBalanceDamage;
+                    if (oneShotKill)
+                    {
+                        proj.configuration.damage = 9999f;
+                        proj.configuration.balanceDamage = 9999f;
+                    }
+                    else
+                    {
+                        if (proj.configuration.damage <= 0f)
+                            proj.configuration.damage = defaultProjectileDamage > 0 ? defaultProjectileDamage : 70f;
+                        if (proj.configuration.balanceDamage <= 0f)
+                            proj.configuration.balanceDamage = defaultProjectileBalanceDamage > 0 ? defaultProjectileBalanceDamage : 60f;
+                    }
                 }
             }
         }
@@ -297,14 +324,16 @@ namespace RaveHack
         {
             if (!enableNoClip) return;
 
-            Vector3 move = Vector3.zero;
-            if (Input.GetKey(KeyCode.W)) move += Camera.main.transform.forward;
-            if (Input.GetKey(KeyCode.S)) move -= Camera.main.transform.forward;
-            if (Input.GetKey(KeyCode.A)) move -= Camera.main.transform.right;
-            if (Input.GetKey(KeyCode.D)) move += Camera.main.transform.right;
-            if (Input.GetKey(KeyCode.Space)) move += Vector3.up;
-            if (Input.GetKey(KeyCode.LeftControl)) move += Vector3.down;
+            foreach (var col in controller.GetComponentsInChildren<Collider>())
+                col.enabled = false;
 
+            Vector3 move = Vector3.zero;
+            if (Input.GetKey(KeyCode.W)) move += controller.transform.forward;
+            if (Input.GetKey(KeyCode.S)) move -= controller.transform.forward;
+            if (Input.GetKey(KeyCode.A)) move -= controller.transform.right;
+            if (Input.GetKey(KeyCode.D)) move += controller.transform.right;
+            if (Input.GetKey(KeyCode.Space)) move += Vector3.up * 0.5f;
+            if (Input.GetKey(KeyCode.LeftControl)) move += Vector3.down * 0.5f;
             if (move != Vector3.zero)
             {
                 move.Normalize();
@@ -316,6 +345,9 @@ namespace RaveHack
         {
             if (!enableFlyHack) return;
 
+            foreach (var col in controller.GetComponentsInChildren<Collider>())
+                col.enabled = true;
+
             Vector3 move = Vector3.zero;
             if (Input.GetKey(KeyCode.W)) move += Camera.main.transform.forward;
             if (Input.GetKey(KeyCode.S)) move -= Camera.main.transform.forward;
@@ -323,7 +355,6 @@ namespace RaveHack
             if (Input.GetKey(KeyCode.D)) move += Camera.main.transform.right;
             if (Input.GetKey(KeyCode.Space)) move += Vector3.up;
             if (Input.GetKey(KeyCode.LeftControl)) move += Vector3.down;
-
             if (move != Vector3.zero)
             {
                 move.Normalize();
@@ -339,43 +370,32 @@ namespace RaveHack
             if (player == null || player.activeWeapon == null) return;
 
             float closestDistance = float.MaxValue;
-            float bestHitChance = 0f;
+            float bestScore = float.MinValue;
             targetActor = null;
+
+            Vector3 cameraPos = Camera.main.transform.position;
+            Vector3 cameraForward = Camera.main.transform.forward;
 
             foreach (var actor in ActorManager.instance.actors)
             {
                 if (actor == null || actor.dead || actor == player) continue;
                 if (teamCheck && actor.team == player.team) continue;
 
-                float distance = Vector3.Distance(player.transform.position, actor.transform.position);
-                
-                RaycastHit hit;
-                Vector3 targetPos = actor.transform.position + Vector3.up;
-                Vector3 directionToTarget = (targetPos - player.transform.position).normalized;
-                
-                if (Physics.Raycast(player.transform.position, directionToTarget, out hit))
+      
+                Vector3 targetPos = actor.transform.position + Vector3.up * 1.1f;
+                Vector3 dirToTarget = (targetPos - cameraPos).normalized;
+                float angle = Vector3.Angle(cameraForward, dirToTarget);
+                if (angle > silentAimFov / 2f) continue;
+
+                float distance = Vector3.Distance(cameraPos, targetPos);
+                if (distance > silentAimMaxDistance) continue;
+
+                float score = (1.0f - (angle / (silentAimFov / 2f))) * (1.0f - (distance / silentAimMaxDistance));
+                if (score > bestScore)
                 {
-                    Hitbox hitbox = hit.collider.GetComponent<Hitbox>();
-                    if (hitbox != null && hitbox.parent == actor)
-                    {
-
-                        float angleToTarget = Vector3.Angle(player.transform.forward, directionToTarget);
-                        float hitChance = (1.0f - (distance / maxDistance)) * (1.0f - (angleToTarget / 180f));
-
-
-                        if (hitChance > bestHitChance)
-                        {
-                            bestHitChance = hitChance;
-                            closestDistance = distance;
-                            targetActor = actor;
-                        }
-
-                        else if (Mathf.Abs(hitChance - bestHitChance) < 0.1f && distance < closestDistance)
-                        {
-                            closestDistance = distance;
-                            targetActor = actor;
-                        }
-                    }
+                    bestScore = score;
+                    closestDistance = distance;
+                    targetActor = actor;
                 }
             }
         }
@@ -389,40 +409,84 @@ namespace RaveHack
                 var player = LocalPlayer.actor;
                 if (player == null || proj.killCredit != player) return;
 
-                Vector3 targetPos = targetActor.transform.position + Vector3.up;
-                Vector3 directionToTarget = (targetPos - proj.transform.position).normalized;
-                
+
+                Vector3 targetPos = targetActor.transform.position + Vector3.up * 1.1f;
+                Vector3 projPos = proj.transform.position;
+                Vector3 toTarget = targetPos - projPos;
+
                 if (proj.configuration != null)
                 {
-
-                    proj.configuration.damage = 150f;
-                    proj.configuration.balanceDamage = 150f;
-
                     float projectileSpeed = proj.configuration.speed;
                     if (projectileSpeed > 0)
                     {
                         Vector3 targetVelocity = targetActor.Velocity();
-                        float timeToTarget = Vector3.Distance(targetPos, proj.transform.position) / projectileSpeed;
+                        float timeToTarget = toTarget.magnitude / projectileSpeed;
                         targetPos += targetVelocity * timeToTarget;
-                        directionToTarget = (targetPos - proj.transform.position).normalized;
+                        toTarget = targetPos - projPos;
                     }
 
 
                     proj.configuration.gravityMultiplier = 0f;
-                    proj.configuration.speed *= 1.5f; 
+                    proj.configuration.speed = Mathf.Max(proj.configuration.speed, 50f);
                 }
 
-                // Set projectile direction and velocity
-                proj.transform.forward = directionToTarget;
+                Vector3 direction = toTarget.normalized;
+                proj.transform.forward = direction;
                 if (proj.configuration != null)
                 {
-                    proj.velocity = directionToTarget * proj.configuration.speed;
+                    proj.velocity = direction * proj.configuration.speed;
                 }
             }
             catch (Exception ex)
             {
                 Debug.LogException(ex);
             }
+        }
+
+        private void CreateCircleMaterial()
+        {
+            if (circleMaterial != null) return;
+
+            var shader = Shader.Find("Hidden/Internal-Colored");
+            circleMaterial = new Material(shader);
+            circleMaterial.hideFlags = HideFlags.HideAndDontSave;
+            circleMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            circleMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            circleMaterial.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
+            circleMaterial.SetInt("_ZWrite", 0);
+        }
+
+        void OnRenderObject()
+        {
+            if (!enableSilentAim) return;
+
+            CreateCircleMaterial();
+            circleMaterial.SetPass(0);
+
+            GL.PushMatrix();
+            GL.LoadPixelMatrix();
+
+            float radius = Screen.height * Mathf.Tan(silentAimFov * 0.5f * Mathf.Deg2Rad);
+            Vector2 center = new Vector2(Screen.width / 2f, Screen.height / 2f);
+
+
+            GL.Begin(GL.LINES);
+            GL.Color(new Color(1f, 1f, 1f, 0.5f));
+            
+            for (int i = 0; i < CIRCLE_SEGMENTS; i++)
+            {
+                float angle1 = (i / (float)CIRCLE_SEGMENTS) * 2 * Mathf.PI;
+                float angle2 = ((i + 1) / (float)CIRCLE_SEGMENTS) * 2 * Mathf.PI;
+
+                Vector2 point1 = new Vector2(Mathf.Cos(angle1), Mathf.Sin(angle1));
+                Vector2 point2 = new Vector2(Mathf.Cos(angle2), Mathf.Sin(angle2));
+
+                GL.Vertex(center + point1 * radius);
+                GL.Vertex(center + point2 * radius);
+            }
+
+            GL.End();
+            GL.PopMatrix();
         }
 
         void OnGUI()
@@ -473,6 +537,9 @@ namespace RaveHack
 
             GUILayout.Label("General", sectionStyle);
             enableESP = GUILayout.Toggle(enableESP, "Enable ESP");
+            enableChams = GUILayout.Toggle(enableChams, "Enable Chams");
+            GUILayout.Label("Chams Color:");
+            chamsColor = RGBSlider(chamsColor);
             enableSpeedHack = GUILayout.Toggle(enableSpeedHack, "Speed Hack");
             if (enableSpeedHack)
             {
@@ -480,7 +547,6 @@ namespace RaveHack
                 GUILayout.Label($"Speed Multiplier: {InjectedSpeedMultiplier:F1}");
             }
             enableHealthHack = GUILayout.Toggle(enableHealthHack, "Infinite Health");
-            antiRagdoll = GUILayout.Toggle(antiRagdoll, "Anti-Ragdoll");
             godMode = GUILayout.Toggle(godMode, "God Mode");
             oneShotKill = GUILayout.Toggle(oneShotKill, "One Shot Kill");
             unlimitedAmmo = GUILayout.Toggle(unlimitedAmmo, "Unlimited Ammo");
@@ -505,6 +571,10 @@ namespace RaveHack
             showBoxESP = GUILayout.Toggle(showBoxESP, "Box ESP");
             showNameESP = GUILayout.Toggle(showNameESP, "Name ESP");
             showDistanceESP = GUILayout.Toggle(showDistanceESP, "Distance ESP");
+            showHealthBarESP = GUILayout.Toggle(showHealthBarESP, "Health Bar ESP");
+            showSkeletonESP = GUILayout.Toggle(showSkeletonESP, "Skeleton ESP");
+            showHeadDotESP = GUILayout.Toggle(showHeadDotESP, "Head Dot ESP");
+            showTracerESP = GUILayout.Toggle(showTracerESP, "Tracer ESP");
             teamCheck = GUILayout.Toggle(teamCheck, "Team Check");
             GUILayout.Label("ESP Color:");
             espColor = RGBSlider(espColor);
@@ -513,16 +583,89 @@ namespace RaveHack
 
             GUILayout.Space(8);
             GUILayout.Label("Silent Aim Settings", sectionStyle);
-            enableSilentAim = GUILayout.Toggle(enableSilentAim, "Enable Silent Aim");
+            enableSilentAim = GUILayout.Toggle(enableSilentAim, $"Enable Silent Aim [{silentAimKey}]");
+            if (enableSilentAim)
+            {
+                silentAimFov = GUILayout.HorizontalSlider(silentAimFov, 10f, 180f);
+                GUILayout.Label($"FOV: {silentAimFov:F1}°");
+                silentAimMaxDistance = GUILayout.HorizontalSlider(silentAimMaxDistance, 50f, 2000f);
+                GUILayout.Label($"Silent Aim Distance: {Mathf.RoundToInt(silentAimMaxDistance)}m");
+            }
+
+            GUILayout.Space(8);
+            GUILayout.Label("Keybinds", sectionStyle);
+            
+            if (waitingForKey)
+            {
+                GUIStyle waitingStyle = new GUIStyle(GUI.skin.label);
+                waitingStyle.normal.textColor = Color.yellow;
+                waitingStyle.fontSize = 14;
+                waitingStyle.alignment = TextAnchor.MiddleCenter;
+                GUILayout.Label("Press any key for: " + currentKeyBindAction, waitingStyle);
+            }
+            else
+            {
+                DrawKeybindButton("ESP", espKey, k => espKey = k);
+                DrawKeybindButton("Speed Hack", speedHackKey, k => speedHackKey = k);
+                DrawKeybindButton("Health Hack", healthHackKey, k => healthHackKey = k);
+                DrawKeybindButton("God Mode", godModeKey, k => godModeKey = k);
+                DrawKeybindButton("One Shot", oneShotKey, k => oneShotKey = k);
+                DrawKeybindButton("No Recoil", noRecoilKey, k => noRecoilKey = k);
+                DrawKeybindButton("No Spread", noSpreadKey, k => noSpreadKey = k);
+                DrawKeybindButton("Rapid Fire", rapidFireKey, k => rapidFireKey = k);
+                DrawKeybindButton("Fly Hack", flyHackKey, k => flyHackKey = k);
+                DrawKeybindButton("No-Clip", noClipKey, k => noClipKey = k);
+                DrawKeybindButton("Silent Aim", silentAimKey, k => silentAimKey = k);
+            }
 
             GUILayout.EndScrollView();
             GUILayout.EndArea();
+        }
+
+        private void DrawKeybindButton(string name, KeyCode key, Action<KeyCode> setKey)
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(name, GUILayout.Width(100));
+            if (GUILayout.Button(key.ToString(), GUILayout.Width(100)))
+            {
+                waitingForKey = true;
+                currentKeyBindAction = name;
+                StartCoroutine(WaitForKey(result => {
+                    setKey(result);
+                    waitingForKey = false;
+                    currentKeyBindAction = "";
+                }));
+            }
+            GUILayout.EndHorizontal();
+        }
+
+        private IEnumerator WaitForKey(System.Action<KeyCode> callback)
+        {
+            yield return new WaitForEndOfFrame();
+            
+            while (!Input.anyKeyDown)
+                yield return null;
+
+            foreach (KeyCode key in System.Enum.GetValues(typeof(KeyCode)))
+            {
+                if (Input.GetKeyDown(key))
+                {
+                 
+                    if (key != KeyCode.Insert)
+                    {
+                        callback(key);
+                    }
+                    break;
+                }
+            }
         }
 
         void DrawESP()
         {
             var localActor = ActorManager.instance?.player;
             if (localActor == null) return;
+
+            Vector2 screenCenter = new Vector2(Screen.width / 2f, Screen.height);
 
             foreach (var actor in ActorManager.instance.actors)
             {
@@ -532,43 +675,82 @@ namespace RaveHack
                 float distance = Vector3.Distance(localActor.transform.position, actor.transform.position);
                 if (distance > maxDistance) continue;
 
+
+                Color color = (actor.team == localActor.team) ? Color.cyan : espColor;
+
+
                 Vector3 bottom = actor.transform.position;
                 Vector3 top = bottom + Vector3.up * 2.0f;
+                Vector3 head = bottom + Vector3.up * 1.8f;
+                Vector3 chest = bottom + Vector3.up * 1.1f;
 
                 Vector3 screenBottom = Camera.main.WorldToScreenPoint(bottom);
                 Vector3 screenTop = Camera.main.WorldToScreenPoint(top);
+                Vector3 screenHead = Camera.main.WorldToScreenPoint(head);
+                Vector3 screenChest = Camera.main.WorldToScreenPoint(chest);
 
-                if (screenBottom.z < 0 || screenTop.z < 0) continue;
+                if (screenBottom.z < 0 || screenTop.z < 0 || screenHead.z < 0) continue;
 
                 screenBottom.y = Screen.height - screenBottom.y;
                 screenTop.y = Screen.height - screenTop.y;
+                screenHead.y = Screen.height - screenHead.y;
+                screenChest.y = Screen.height - screenChest.y;
 
                 float height = screenBottom.y - screenTop.y;
                 float width = height / 2;
 
+
+                if (showTracerESP)
+                    DrawLine(new Vector2(Screen.width / 2f, Screen.height - 10), new Vector2(screenBottom.x, screenBottom.y), color, 2f);
+
+
                 if (showBoxESP)
-                    DrawBox(screenTop.x - width / 2, screenTop.y, width, height, espColor);
+                    DrawBox(screenTop.x - width / 2, screenTop.y, width, height, color);
+
+
+                if (showHealthBarESP)
+                {
+                    float health = Mathf.Clamp(actor.health, 0, 100);
+                    float healthBarHeight = height;
+                    float healthBarWidth = 5f;
+                    float healthBarX = screenTop.x - width / 2 - 8f;
+                    float healthBarY = screenTop.y;
+                    DrawHealthBar(healthBarX, healthBarY, healthBarWidth, healthBarHeight, health / 100f);
+                }
+
+
+                if (showSkeletonESP)
+                {
+                    DrawLine(new Vector2(screenHead.x, screenHead.y), new Vector2(screenChest.x, screenChest.y), color, 2f);
+                    DrawLine(new Vector2(screenChest.x, screenChest.y), new Vector2(screenBottom.x, screenBottom.y), color, 2f);
+                }
+
+
+                if (showHeadDotESP)
+                    DrawCircle(new Vector2(screenHead.x, screenHead.y), 6f, color, 1.5f);
+
+                int fontSize = Mathf.Clamp((int)(32 - distance / 10f), 10, 22);
 
                 if (showNameESP)
                 {
-                    var namePos = new Vector2(screenTop.x, screenTop.y - 15);
-                    DrawLabel(namePos, actor.name, espColor);
+                    var namePos = new Vector2(screenTop.x, screenTop.y - 18);
+                    DrawLabel(namePos, actor.name, color, fontSize);
                 }
 
                 if (showDistanceESP)
                 {
-                    var distPos = new Vector2(screenBottom.x, screenBottom.y + 5);
-                    DrawLabel(distPos, $"{distance:F1}m", espColor);
+                    var distPos = new Vector2(screenBottom.x, screenBottom.y + 8);
+                    DrawLabel(distPos, $"{distance:F1}m", color, fontSize);
                 }
             }
         }
 
-        void DrawLabel(Vector2 position, string text, Color color)
+        void DrawLabel(Vector2 position, string text, Color color, int fontSize = 12)
         {
             GUIStyle style = new GUIStyle(GUI.skin.label);
             style.normal.textColor = color;
             style.alignment = TextAnchor.MiddleCenter;
-            style.fontSize = 12;
+            style.fontSize = fontSize;
             GUI.Label(new Rect(position.x - 50, position.y, 100, 20), text, style);
         }
 
@@ -579,7 +761,44 @@ namespace RaveHack
             GUI.DrawTexture(new Rect(x, y + h, w, 1), Texture2D.whiteTexture); // Bottom
             GUI.DrawTexture(new Rect(x, y, 1, h), Texture2D.whiteTexture); // Left
             GUI.DrawTexture(new Rect(x + w, y, 1, h), Texture2D.whiteTexture); // Right
+            GUI.DrawTexture(new Rect(x, y, w, 1), Texture2D.whiteTexture); // Top
             GUI.color = old;
+        }
+
+        void DrawHealthBar(float x, float y, float w, float h, float percent)
+        {
+            Color old = GUI.color;
+            GUI.color = Color.black;
+            GUI.DrawTexture(new Rect(x, y, w, h), Texture2D.whiteTexture);
+            GUI.color = Color.green;
+            GUI.DrawTexture(new Rect(x, y + h * (1 - percent), w, h * percent), Texture2D.whiteTexture);
+            GUI.color = old;
+        }
+
+        void DrawLine(Vector2 p1, Vector2 p2, Color color, float thickness = 1f)
+        {
+            Color old = GUI.color;
+            Matrix4x4 matrix = GUI.matrix;
+            GUI.color = color;
+            float angle = Mathf.Atan2(p2.y - p1.y, p2.x - p1.x) * Mathf.Rad2Deg;
+            float length = Vector2.Distance(p1, p2);
+            GUIUtility.RotateAroundPivot(angle, p1);
+            GUI.DrawTexture(new Rect(p1.x, p1.y, length, thickness), Texture2D.whiteTexture);
+            GUI.matrix = matrix;
+            GUI.color = old;
+        }
+
+        void DrawCircle(Vector2 center, float radius, Color color, float thickness = 1f)
+        {
+            int segments = 24;
+            Vector2 prev = center + new Vector2(Mathf.Cos(0), Mathf.Sin(0)) * radius;
+            for (int i = 1; i <= segments; i++)
+            {
+                float theta = (i / (float)segments) * 2 * Mathf.PI;
+                Vector2 next = center + new Vector2(Mathf.Cos(theta), Mathf.Sin(theta)) * radius;
+                DrawLine(prev, next, color, thickness);
+                prev = next;
+            }
         }
 
         Color RGBSlider(Color c)
@@ -599,6 +818,45 @@ namespace RaveHack
             result.SetPixels(pix);
             result.Apply();
             return result;
+        }
+
+        private void HandleChams()
+        {
+            var localActor = ActorManager.instance?.player;
+            foreach (var actor in ActorManager.instance.actors)
+            {
+                if (actor == null || actor.dead) continue;
+                var skinned = actor.GetComponentInChildren<SkinnedMeshRenderer>();
+                if (skinned == null) continue;
+
+        
+                if (!originalChamsMaterials.ContainsKey(skinned))
+                    originalChamsMaterials[skinned] = skinned.sharedMaterial;
+
+                float distance = localActor != null ? Vector3.Distance(localActor.transform.position, actor.transform.position) : 0f;
+
+
+                bool isEnemy = localActor != null && actor.team != localActor.team;
+                bool inDistance = distance <= CHAMS_MAX_DISTANCE;
+
+                if (enableChams && isEnemy && inDistance)
+                {
+
+                    var shader = Shader.Find("Hidden/Internal-Colored");
+                    if (shader != null)
+                    {
+                        skinned.material.shader = shader;
+                        skinned.material.color = chamsColor;
+                        skinned.material.SetInt("_ZTest", (int)UnityEngine.Rendering.CompareFunction.Always);
+                        skinned.material.renderQueue = 3000;
+                    }
+                }
+                else
+                {
+                    if (originalChamsMaterials.ContainsKey(skinned))
+                        skinned.sharedMaterial = originalChamsMaterials[skinned];
+                }
+            }
         }
     }
 }
