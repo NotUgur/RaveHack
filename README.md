@@ -27,6 +27,9 @@ To Eject:
 - Class Name: Loader
 - Method Name: Unload
 
+#### THE LATEST VERSION WONT BE IN THIS SECTION, TO SEE LATEST VERSION CHANGELOGS, GO TO Changelogs.md FOLDER OR THE LATEST RELEASE'S DESCRIPTION.
+
+
 
 ## VERSION 1.1 KNOWN ISSUES
 - godmode doesnt protects you from bombs, tanks etc.
