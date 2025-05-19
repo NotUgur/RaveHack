@@ -1,3 +1,19 @@
+## VERSION 1.3
+
+- Added Chams
+- Added More ESP Settings
+- Added Distance to Silent-Aim
+- Added FOV to Silent Aim
+- Fixed The Bugs On Silent Aim
+- Added Keybind System
+- Removed Anti-Ragdoll (Doesnt work, May Add Later If I find A way to make it work.)
+
+
+## VERSION 1.3 KNOWN ISSUES
+
+- Broken No-Clip (Works But Bad)
+
+
 ## VERSION 1.2
 
 - Added Silent Aim
