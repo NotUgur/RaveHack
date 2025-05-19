@@ -1,6 +1,8 @@
 ## VERSION 1.2
 
 - Added Silent Aim
+- Fixed Some Bugs
+- No Clip Does Work :)
 
 ## V1.2 KNOWN ISSUES 
 
