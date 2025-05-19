@@ -16,16 +16,16 @@ Or Just Download The Compiled DLL From Releases and Inject it via any Mono Injec
 
 Make Sure To Set:
 
-Namespace: RaveHack
-Class Name: Loader
-Method Name: Init
+- Namespace: RaveHack
+- Class Name: Loader
+- Method Name: Init
 
 
 To Eject:
 
-Namespace: RaveHack
-Class Name: Loader
-Method Name: Unload
+- Namespace: RaveHack
+- Class Name: Loader
+- Method Name: Unload
 
 
 ## VERSION 1.1 KNOWN ISSUES
