@@ -39,7 +39,6 @@ namespace RaveHack
 
         private GUIStyle labelStyle;
 
-        public bool godMode = false;
         public bool rapidFire = false;
         private bool showMenu = true;
 
@@ -72,7 +71,6 @@ namespace RaveHack
         public KeyCode espKey = KeyCode.F1;
         public KeyCode speedHackKey = KeyCode.F2;
         public KeyCode healthHackKey = KeyCode.F3;
-        public KeyCode godModeKey = KeyCode.F4;
         public KeyCode oneShotKey = KeyCode.F5;
         public KeyCode noRecoilKey = KeyCode.F6;
         public KeyCode noSpreadKey = KeyCode.F7;
@@ -102,6 +100,30 @@ namespace RaveHack
         private Dictionary<SkinnedMeshRenderer, Material> originalChamsMaterials = new Dictionary<SkinnedMeshRenderer, Material>();
 
         public float silentAimMaxDistance = 500f;
+
+        private float silentAimUpdateTimer = 0f;
+        private float silentAimUpdateInterval = 0.15f;
+        
+        private bool lastChamsState = false;
+        private int lastChamsActorCount = 0;
+
+        private int lastWeaponAmmo = -1;
+
+
+        private float chamsUpdateTimer = 0f;
+        private float chamsUpdateInterval = 1f;
+        private HashSet<Projectile> lastProjectiles = new HashSet<Projectile>();
+
+        public bool enableCustomCrosshair = false;
+        public Color crosshairColor = Color.green;
+        public int crosshairType = 0; // 0 dot 1 cross 2 circle
+        public bool rainbowChams = false;
+        public bool rainbowESP = false;
+
+        public bool enemiesCantShoot = false;
+
+
+        public float chamsDistance = 70f;
 
         void Start()
         {
@@ -153,25 +175,43 @@ namespace RaveHack
 
             HandleSpeedHack(player);
             HandleHealthHack(player);
-            HandleGodMode(player);
             HandleWeaponEnhancements(player);
             HandleProjectiles(player);
             HandleMovementHacks(player);
-            HandleSilentAim();
+            if (enemiesCantShoot) HandleTakeEnemyWeapons();
 
-            if (enableSilentAim)
+
+            if (enableSilentAim && player.activeWeapon != null)
             {
-                foreach (var proj in FindObjectsOfType<Projectile>())
+                var allProjectiles = FindObjectsOfType<Projectile>();
+                var newProjectiles = new List<Projectile>();
+                foreach (var proj in allProjectiles)
                 {
-                    if (proj.killCredit == player)
+                    if (!lastProjectiles.Contains(proj) && proj.killCredit == player && proj.sourceWeapon == player.activeWeapon)
                     {
-                        ModifyProjectile(proj);
+                        newProjectiles.Add(proj);
                     }
                 }
+                foreach (var proj in newProjectiles)
+                {
+                    var target = FindSilentAimTargetFromProjectile(proj);
+                    if (target != null)
+                        ModifyProjectile(proj, target);
+                }
+                lastProjectiles = new HashSet<Projectile>(allProjectiles);
+            }
+            else
+            {
+                lastProjectiles.Clear();
             }
 
-            if (enableChams)
+
+            chamsUpdateTimer += Time.deltaTime;
+            if (enableChams && chamsUpdateTimer >= chamsUpdateInterval)
+            {
                 HandleChams();
+                chamsUpdateTimer = 0f;
+            }
         }
 
         private void UpdateFPS()
@@ -205,7 +245,6 @@ namespace RaveHack
                 if (Input.GetKeyDown(espKey)) enableESP = !enableESP;
                 if (Input.GetKeyDown(speedHackKey)) enableSpeedHack = !enableSpeedHack;
                 if (Input.GetKeyDown(healthHackKey)) enableHealthHack = !enableHealthHack;
-                if (Input.GetKeyDown(godModeKey)) godMode = !godMode;
                 if (Input.GetKeyDown(oneShotKey)) oneShotKill = !oneShotKill;
                 if (Input.GetKeyDown(noRecoilKey)) noRecoil = !noRecoil;
                 if (Input.GetKeyDown(noSpreadKey)) noSpread = !noSpread;
@@ -229,16 +268,6 @@ namespace RaveHack
             if (enableHealthHack)
             {
                 player.health = InjectedHealthHack;
-            }
-        }
-
-        private void HandleGodMode(Actor player)
-        {
-            foreach (var col in player.GetComponentsInChildren<Collider>())
-            {
-                col.gameObject.layer = godMode ? 
-                    LayerMask.NameToLayer("Ignore Raycast") : 
-                    LayerMask.NameToLayer("Default");
             }
         }
 
@@ -315,8 +344,23 @@ namespace RaveHack
         {
             if (player.controller is FpsActorController fpsController)
             {
-                HandleNoClip(fpsController);
-                HandleFlyHack(fpsController);
+                bool isProne = false;
+                var proneField = player.GetType().GetField("prone", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+                if (proneField != null)
+                {
+                    isProne = (bool)proneField.GetValue(player);
+                }
+                if (!isProne)
+                {
+                    HandleNoClip(fpsController);
+                    HandleFlyHack(fpsController);
+                }
+                if (enableNoClip || enableFlyHack)
+                {
+                    if (Input.GetKeyDown(KeyCode.Z) || Input.GetKeyDown(KeyCode.C))
+                    {
+                    }
+                }
             }
         }
 
@@ -381,7 +425,6 @@ namespace RaveHack
                 if (actor == null || actor.dead || actor == player) continue;
                 if (teamCheck && actor.team == player.team) continue;
 
-      
                 Vector3 targetPos = actor.transform.position + Vector3.up * 1.1f;
                 Vector3 dirToTarget = (targetPos - cameraPos).normalized;
                 float angle = Vector3.Angle(cameraForward, dirToTarget);
@@ -400,17 +443,16 @@ namespace RaveHack
             }
         }
 
-        private void ModifyProjectile(Projectile proj)
+        private void ModifyProjectile(Projectile proj, Actor target)
         {
-            if (!enableSilentAim || targetActor == null || proj == null) return;
+            if (!enableSilentAim || target == null || proj == null) return;
 
             try
             {
                 var player = LocalPlayer.actor;
                 if (player == null || proj.killCredit != player) return;
 
-
-                Vector3 targetPos = targetActor.transform.position + Vector3.up * 1.1f;
+                Vector3 targetPos = target.transform.position + Vector3.up * 1.1f;
                 Vector3 projPos = proj.transform.position;
                 Vector3 toTarget = targetPos - projPos;
 
@@ -419,12 +461,11 @@ namespace RaveHack
                     float projectileSpeed = proj.configuration.speed;
                     if (projectileSpeed > 0)
                     {
-                        Vector3 targetVelocity = targetActor.Velocity();
+                        Vector3 targetVelocity = target.Velocity();
                         float timeToTarget = toTarget.magnitude / projectileSpeed;
                         targetPos += targetVelocity * timeToTarget;
                         toTarget = targetPos - projPos;
                     }
-
 
                     proj.configuration.gravityMultiplier = 0f;
                     proj.configuration.speed = Mathf.Max(proj.configuration.speed, 50f);
@@ -504,6 +545,9 @@ namespace RaveHack
             {
                 DrawGUI();
             }
+
+            if (enableCustomCrosshair)
+                DrawCustomCrosshair();
         }
 
         void DrawGUI()
@@ -525,7 +569,7 @@ namespace RaveHack
             sectionStyle.normal.textColor = new Color(0.7f, 0.7f, 1f);
             sectionStyle.margin = new RectOffset(0, 0, 8, 4);
 
-            float menuWidth = 320;
+            float menuWidth = 340;
             float menuHeight = Screen.height - 40;
             Rect menuArea = new Rect(10, 20, menuWidth, menuHeight);
 
@@ -536,38 +580,12 @@ namespace RaveHack
             GUILayout.Space(8);
 
             GUILayout.Label("General", sectionStyle);
-            enableESP = GUILayout.Toggle(enableESP, "Enable ESP");
-            enableChams = GUILayout.Toggle(enableChams, "Enable Chams");
-            GUILayout.Label("Chams Color:");
-            chamsColor = RGBSlider(chamsColor);
-            enableSpeedHack = GUILayout.Toggle(enableSpeedHack, "Speed Hack");
-            if (enableSpeedHack)
-            {
-                InjectedSpeedMultiplier = GUILayout.HorizontalSlider(InjectedSpeedMultiplier, 1f, 10f);
-                GUILayout.Label($"Speed Multiplier: {InjectedSpeedMultiplier:F1}");
-            }
-            enableHealthHack = GUILayout.Toggle(enableHealthHack, "Infinite Health");
-            godMode = GUILayout.Toggle(godMode, "God Mode");
-            oneShotKill = GUILayout.Toggle(oneShotKill, "One Shot Kill");
-            unlimitedAmmo = GUILayout.Toggle(unlimitedAmmo, "Unlimited Ammo");
-            noRecoil = GUILayout.Toggle(noRecoil, "No Recoil");
-            noSpread = GUILayout.Toggle(noSpread, "No Spread");
-            rapidFire = GUILayout.Toggle(rapidFire, "Rapid Fire");
-            enableFlyHack = GUILayout.Toggle(enableFlyHack, "Fly");
-            if (enableFlyHack)
-            {
-                flySpeed = GUILayout.HorizontalSlider(flySpeed, 5f, 100f);
-                GUILayout.Label($"Fly Speed: {flySpeed:F1}");
-            }
-            enableNoClip = GUILayout.Toggle(enableNoClip, "No-Clip");
-            if (enableNoClip)
-            {
-                noClipSpeed = GUILayout.HorizontalSlider(noClipSpeed, 5f, 100f);
-                GUILayout.Label($"No-Clip Speed: {noClipSpeed:F1}");
-            }
-
+            enemiesCantShoot = GUILayout.Toggle(enemiesCantShoot, "Enemies Can't Shoot");
             GUILayout.Space(8);
-            GUILayout.Label("ESP Settings", sectionStyle);
+
+            GUILayout.Label("Visuals", sectionStyle);
+            enableESP = GUILayout.Toggle(enableESP, "Enable ESP");
+            rainbowESP = GUILayout.Toggle(rainbowESP, "Rainbow ESP");
             showBoxESP = GUILayout.Toggle(showBoxESP, "Box ESP");
             showNameESP = GUILayout.Toggle(showNameESP, "Name ESP");
             showDistanceESP = GUILayout.Toggle(showDistanceESP, "Distance ESP");
@@ -580,9 +598,56 @@ namespace RaveHack
             espColor = RGBSlider(espColor);
             maxDistance = GUILayout.HorizontalSlider(maxDistance, 50f, 3000f);
             GUILayout.Label($"ESP Distance: {Mathf.RoundToInt(maxDistance)}m");
-
             GUILayout.Space(8);
-            GUILayout.Label("Silent Aim Settings", sectionStyle);
+
+            enableChams = GUILayout.Toggle(enableChams, "Enable Chams");
+            rainbowChams = GUILayout.Toggle(rainbowChams, "Rainbow Chams");
+            GUILayout.Label("Chams Color:");
+            chamsColor = RGBSlider(chamsColor);
+            chamsDistance = GUILayout.HorizontalSlider(chamsDistance, 10f, 300f);
+            GUILayout.Label($"Chams Distance: {Mathf.RoundToInt(chamsDistance)}m");
+            GUILayout.Space(8);
+
+            enableCustomCrosshair = GUILayout.Toggle(enableCustomCrosshair, "Custom Crosshair");
+            if (enableCustomCrosshair)
+            {
+                GUILayout.Label("Crosshair Color:");
+                crosshairColor = RGBSlider(crosshairColor);
+                GUILayout.Label("Crosshair Type:");
+                crosshairType = GUILayout.SelectionGrid(crosshairType, new string[] { "Dot", "Cross", "Circle" }, 3);
+            }
+            GUILayout.Space(8);
+
+            GUILayout.Label("Weapon", sectionStyle);
+            oneShotKill = GUILayout.Toggle(oneShotKill, "One Shot Kill");
+            unlimitedAmmo = GUILayout.Toggle(unlimitedAmmo, "Unlimited Ammo");
+            noRecoil = GUILayout.Toggle(noRecoil, "No Recoil");
+            noSpread = GUILayout.Toggle(noSpread, "No Spread");
+            rapidFire = GUILayout.Toggle(rapidFire, "Rapid Fire");
+            GUILayout.Space(8);
+
+            GUILayout.Label("Movement", sectionStyle);
+            enableSpeedHack = GUILayout.Toggle(enableSpeedHack, "Speed Hack");
+            if (enableSpeedHack)
+            {
+                InjectedSpeedMultiplier = GUILayout.HorizontalSlider(InjectedSpeedMultiplier, 1f, 10f);
+                GUILayout.Label($"Speed Multiplier: {InjectedSpeedMultiplier:F1}");
+            }
+            enableFlyHack = GUILayout.Toggle(enableFlyHack, "Fly");
+            if (enableFlyHack)
+            {
+                flySpeed = GUILayout.HorizontalSlider(flySpeed, 5f, 100f);
+                GUILayout.Label($"Fly Speed: {flySpeed:F1}");
+            }
+            enableNoClip = GUILayout.Toggle(enableNoClip, "No-Clip");
+            if (enableNoClip)
+            {
+                noClipSpeed = GUILayout.HorizontalSlider(noClipSpeed, 5f, 100f);
+                GUILayout.Label($"No-Clip Speed: {noClipSpeed:F1}");
+            }
+            GUILayout.Space(8);
+
+            GUILayout.Label("Silent Aim", sectionStyle);
             enableSilentAim = GUILayout.Toggle(enableSilentAim, $"Enable Silent Aim [{silentAimKey}]");
             if (enableSilentAim)
             {
@@ -591,10 +656,9 @@ namespace RaveHack
                 silentAimMaxDistance = GUILayout.HorizontalSlider(silentAimMaxDistance, 50f, 2000f);
                 GUILayout.Label($"Silent Aim Distance: {Mathf.RoundToInt(silentAimMaxDistance)}m");
             }
-
             GUILayout.Space(8);
+
             GUILayout.Label("Keybinds", sectionStyle);
-            
             if (waitingForKey)
             {
                 GUIStyle waitingStyle = new GUIStyle(GUI.skin.label);
@@ -607,8 +671,6 @@ namespace RaveHack
             {
                 DrawKeybindButton("ESP", espKey, k => espKey = k);
                 DrawKeybindButton("Speed Hack", speedHackKey, k => speedHackKey = k);
-                DrawKeybindButton("Health Hack", healthHackKey, k => healthHackKey = k);
-                DrawKeybindButton("God Mode", godModeKey, k => godModeKey = k);
                 DrawKeybindButton("One Shot", oneShotKey, k => oneShotKey = k);
                 DrawKeybindButton("No Recoil", noRecoilKey, k => noRecoilKey = k);
                 DrawKeybindButton("No Spread", noSpreadKey, k => noSpreadKey = k);
@@ -675,9 +737,7 @@ namespace RaveHack
                 float distance = Vector3.Distance(localActor.transform.position, actor.transform.position);
                 if (distance > maxDistance) continue;
 
-
-                Color color = (actor.team == localActor.team) ? Color.cyan : espColor;
-
+                Color color = (actor.team == localActor.team) ? Color.cyan : (rainbowESP ? GetRainbowColor(0.5f) : espColor);
 
                 Vector3 bottom = actor.transform.position;
                 Vector3 top = bottom + Vector3.up * 2.0f;
@@ -699,14 +759,11 @@ namespace RaveHack
                 float height = screenBottom.y - screenTop.y;
                 float width = height / 2;
 
-
                 if (showTracerESP)
                     DrawLine(new Vector2(Screen.width / 2f, Screen.height - 10), new Vector2(screenBottom.x, screenBottom.y), color, 2f);
 
-
                 if (showBoxESP)
                     DrawBox(screenTop.x - width / 2, screenTop.y, width, height, color);
-
 
                 if (showHealthBarESP)
                 {
@@ -718,13 +775,11 @@ namespace RaveHack
                     DrawHealthBar(healthBarX, healthBarY, healthBarWidth, healthBarHeight, health / 100f);
                 }
 
-
                 if (showSkeletonESP)
                 {
                     DrawLine(new Vector2(screenHead.x, screenHead.y), new Vector2(screenChest.x, screenChest.y), color, 2f);
                     DrawLine(new Vector2(screenChest.x, screenChest.y), new Vector2(screenBottom.x, screenBottom.y), color, 2f);
                 }
-
 
                 if (showHeadDotESP)
                     DrawCircle(new Vector2(screenHead.x, screenHead.y), 6f, color, 1.5f);
@@ -823,40 +878,136 @@ namespace RaveHack
         private void HandleChams()
         {
             var localActor = ActorManager.instance?.player;
+            Color chamsCol = rainbowChams ? GetRainbowColor(0.5f) : chamsColor;
             foreach (var actor in ActorManager.instance.actors)
             {
                 if (actor == null || actor.dead) continue;
-                var skinned = actor.GetComponentInChildren<SkinnedMeshRenderer>();
-                if (skinned == null) continue;
-
-        
-                if (!originalChamsMaterials.ContainsKey(skinned))
-                    originalChamsMaterials[skinned] = skinned.sharedMaterial;
+                var skinnedRenderers = actor.GetComponentsInChildren<SkinnedMeshRenderer>();
+                if (skinnedRenderers == null || skinnedRenderers.Length == 0) continue;
 
                 float distance = localActor != null ? Vector3.Distance(localActor.transform.position, actor.transform.position) : 0f;
-
-
                 bool isEnemy = localActor != null && actor.team != localActor.team;
-                bool inDistance = distance <= CHAMS_MAX_DISTANCE;
+                bool inDistance = distance <= chamsDistance;
 
-                if (enableChams && isEnemy && inDistance)
+                foreach (var skinned in skinnedRenderers)
                 {
+                    if (!originalChamsMaterials.ContainsKey(skinned))
+                        originalChamsMaterials[skinned] = skinned.sharedMaterial;
 
-                    var shader = Shader.Find("Hidden/Internal-Colored");
-                    if (shader != null)
+                    if (enableChams && isEnemy && inDistance)
                     {
-                        skinned.material.shader = shader;
-                        skinned.material.color = chamsColor;
-                        skinned.material.SetInt("_ZTest", (int)UnityEngine.Rendering.CompareFunction.Always);
-                        skinned.material.renderQueue = 3000;
+                        var shader = Shader.Find("Hidden/Internal-Colored");
+                        if (shader != null)
+                        {
+                            skinned.material.shader = shader;
+                            skinned.material.color = chamsCol;
+                            skinned.material.SetInt("_ZTest", (int)UnityEngine.Rendering.CompareFunction.Always);
+                            skinned.material.renderQueue = 3000;
+                        }
+                    }
+                    else
+                    {
+                        if (originalChamsMaterials.ContainsKey(skinned))
+                            skinned.sharedMaterial = originalChamsMaterials[skinned];
                     }
                 }
-                else
+            }
+        }
+
+        private Actor FindSilentAimTargetFromProjectile(Projectile proj)
+        {
+            var player = LocalPlayer.actor;
+            if (player == null || player.activeWeapon == null) return null;
+
+            float bestScore = float.MinValue;
+            Actor bestTarget = null;
+
+            Vector3 projPos = proj.transform.position;
+            Vector3 projForward = proj.transform.forward;
+
+            foreach (var actor in ActorManager.instance.actors)
+            {
+                if (actor == null || actor.dead || actor == player) continue;
+                if (teamCheck && actor.team == player.team) continue;
+
+                Vector3 targetPos = actor.transform.position + Vector3.up * 1.1f;
+                Vector3 dirToTarget = (targetPos - projPos).normalized;
+                float angle = Vector3.Angle(projForward, dirToTarget);
+                if (angle > silentAimFov / 2f) continue;
+
+                float distance = Vector3.Distance(projPos, targetPos);
+                if (distance > silentAimMaxDistance) continue;
+
+                float score = (1.0f - (angle / (silentAimFov / 2f))) * (1.0f - (distance / silentAimMaxDistance));
+                if (score > bestScore)
                 {
-                    if (originalChamsMaterials.ContainsKey(skinned))
-                        skinned.sharedMaterial = originalChamsMaterials[skinned];
+                    bestScore = score;
+                    bestTarget = actor;
+                }
+            }
+            return bestTarget;
+        }
+
+        void LateUpdate()
+        {
+            var player = LocalPlayer.actor;
+            if (player != null)
+            {
+                var proneField = player.GetType().GetField("prone", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+                if (proneField != null)
+                {
+                    proneField.SetValue(player, false);
+                }
+            }
+        }
+
+        void DrawCustomCrosshair()
+        {
+            Vector2 center = new Vector2(Screen.width / 2f, Screen.height / 2f);
+            Color old = GUI.color;
+            GUI.color = crosshairColor;
+            if (crosshairType == 0) // dot
+                GUI.DrawTexture(new Rect(center.x - 3, center.y - 3, 6, 6), Texture2D.whiteTexture);
+            else if (crosshairType == 1) // cross
+            {
+                GUI.DrawTexture(new Rect(center.x - 10, center.y - 1, 20, 2), Texture2D.whiteTexture);
+                GUI.DrawTexture(new Rect(center.x - 1, center.y - 10, 2, 20), Texture2D.whiteTexture);
+            }
+            else if (crosshairType == 2) // circle
+                DrawCircle(center, 12, crosshairColor, 2f);
+            GUI.color = old;
+        }
+
+        private Color GetRainbowColor(float speed = 1f)
+        {
+            float t = Time.time * speed;
+            return Color.HSVToRGB((t % 1f), 1f, 1f);
+        }
+
+        private void HandleTakeEnemyWeapons()
+        {
+            foreach (var actor in ActorManager.instance.actors)
+            {
+                if (actor == null || actor.dead || actor == LocalPlayer.actor || actor.team == LocalPlayer.actor.team) continue;
+                var weapon = actor.activeWeapon;
+                if (weapon != null)
+                {
+                    weapon.ammo = 0;
+                    weapon.spareAmmo = 0;
+                    var config = weapon.configuration;
+                    if (config != null)
+                    {
+                        config.ammo = 0;
+                        config.spareAmmo = 0;
+                        config.cooldown = 9999f;
+                        var canFireField = config.GetType().GetField("canFire", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+                        if (canFireField != null) canFireField.SetValue(config, false);
+                        var canShootField = config.GetType().GetField("canShoot", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+                        if (canShootField != null) canShootField.SetValue(config, false);
+                    }
                 }
             }
         }
     }
 }
+
