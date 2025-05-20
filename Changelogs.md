@@ -1,3 +1,19 @@
+## VERSION 1.4
+
+- Added Rainbow Chams/ESP
+- Added Chams Distance
+- Added Enemies Cant Shoot
+- Added Custom Crosshair
+- Removed God Mode (Enemies Cant Shoot is better imo)
+- Fixed Chams FPS bug (a.k.a. FPS Optimization)
+- GUI Semi Re-Design
+
+## VERSION 1.4
+
+- No-Clip is still broken (Works But Bad, Fly Is Better You Can Use It)
+- Theres An Issue When Player Lays Down, Idk Why It Happens, It Happens on Older Versions Too (I Will Try To Fix It)
+
+
 ## VERSION 1.3
 
 - Added Chams
