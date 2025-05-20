@@ -148,7 +148,6 @@ namespace RaveHack
             return tex;
         }
 
-        // Teleport dropdown state
         private int selectedFlagIndex = 0;
         private string[] flagNames = new string[0];
         private Vector3[] flagPositions = new Vector3[0];
@@ -201,7 +200,6 @@ namespace RaveHack
                 initialized = true;
             }
 
-            // Auto-refresh teleport lists every 10 seconds
             teleportListUpdateTimer += Time.deltaTime;
             if (teleportListUpdateTimer >= TELEPORT_LIST_UPDATE_INTERVAL)
             {
@@ -255,7 +253,7 @@ namespace RaveHack
                 chamsUpdateTimer = 0f;
             }
 
-            // Skybox uygulama - ANINDA
+
             if (rainbowSkybox)
             {
                 HandleRainbowSkybox();
@@ -269,7 +267,7 @@ namespace RaveHack
                 RenderSettings.skybox.CopyPropertiesFromMaterial(originalSkybox);
             }
 
-            // Skybox değişimi anında uygula
+
             if (lastCustomSky != customSky || lastSelectedSkybox != selectedSkybox)
             {
                 if (customSky)
@@ -734,7 +732,7 @@ namespace RaveHack
             GUILayout.Space(8);
 
             GUILayout.Label("Teleport", sectionStyle);
-            // Flags
+
             if (flagNames.Length > 0)
             {
                 GUILayout.Label("Teleport to Flag:");
@@ -749,7 +747,6 @@ namespace RaveHack
                 GUILayout.Label("No flags found.");
             }
             GUILayout.Space(8);
-            // Players
             if (playerNames.Length > 0)
             {
                 GUILayout.Label("Teleport to Player:");
