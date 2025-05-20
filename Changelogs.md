@@ -1,3 +1,18 @@
+## VERSION 1.5
+
+- Added Teleport To Players / Flags
+- Added Skybox / Rainbow Skybox
+- Added Rias Gremory ESP (hehe)
+- Fixed Bugs. (Laying Down etc.)
+- Optimized The Code.
+
+- Its More Like A Bug Fix Update Than A Feature Update.
+
+## VERSION 1.5 KNOWN ISSUES
+
+- I dont Know any Issues, this is a Stable Release.
+- NoClip still broken (I forgot and I dont want to fix it since Fly Works Better, probably I will delete that on the new release (1.6))
+
 ## VERSION 1.4
 
 - Added Rainbow Chams/ESP
